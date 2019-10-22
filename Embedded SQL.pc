@@ -1,0 +1,577 @@
+/*
+ *  project.pc
+ *
+ *  This program connects to ORACLE, declares and opens a cursor, 
+ *  fetches the names, salaries, and commissions of all
+ *  salespeople, displays the results, then closes the cursor. 
+ */ 
+
+#include <stdio.h>
+#include <string.h>
+#include <sqlca.h>
+#include <stdlib.h>
+#include <sqlda.h>
+#include <sqlcpr.h>
+
+#define UNAME_LEN      20 
+#define PWD_LEN        20 
+ 
+/*
+ * Use the precompiler typedef'ing capability to create
+ * null-terminated strings for the authentication host
+ * variables. (This isn't really necessary--plain char *'s
+ * would work as well. This is just for illustration.)
+ */
+typedef char asciiz[PWD_LEN]; 
+
+EXEC SQL TYPE asciiz IS CHARZ(PWD_LEN) REFERENCE; 
+asciiz     username; 
+asciiz     password; 
+
+struct active_presc 
+{ 
+    asciiz     presc_id;  
+}; 
+struct man_and_dis 
+{ 
+    asciiz     man_id;
+    asciiz     man_name; 
+    asciiz     man_address; 
+    asciiz     comp_id;
+    asciiz     dis_id;
+    asciiz     dis_name; 
+    asciiz     dis_address; 
+}; 
+
+struct prescription 
+{ 
+    asciiz     presc_id;
+    asciiz     fill_type;
+    asciiz     comp_id;
+    int        tax_num;
+};
+
+struct generic
+{ 
+    asciiz     gen_no;
+    asciiz     gen_type;
+    asciiz     gen_id;
+};
+
+
+struct compound_dia 
+{ 
+    asciiz     presc_id; 
+}; 
+
+
+
+
+
+void sql_error(msg) 
+    char *msg;
+{ 
+    char err_msg[512];
+    size_t buf_len, msg_len;
+
+    EXEC SQL WHENEVER SQLERROR CONTINUE;
+
+    printf("\n%s\n", msg);
+
+/* Call sqlglm() to get the complete text of the
+ * error message.
+ */
+    buf_len = sizeof (err_msg);
+    sqlglm(err_msg, &buf_len, &msg_len);
+    printf("%.*s\n", msg_len, err_msg);
+
+    EXEC SQL ROLLBACK RELEASE;
+    exit(EXIT_FAILURE);
+} 
+
+int clear_input_buffer(void) {
+    int ch;
+    while (((ch = getchar()) != EOF) && (ch != '\n')) /* void */;
+    return ch;
+}
+
+void main() 
+{ 
+    struct active_presc *active_rec_ptr; 
+    struct man_and_dis *md_rec_ptr;
+    struct prescription *presc_rec_ptr;
+    struct generic      *gen_rec_ptr;
+    struct compound_dia *cd_rec_ptr;
+
+/* Allocate memory for structs */ 
+    if ((active_rec_ptr = 
+        (struct active_presc *) malloc(sizeof(struct active_presc))) == 0)
+    { 
+        fprintf(stderr, "Memory allocation error.\n"); 
+        exit(EXIT_FAILURE); 
+    } 
+
+      if ((md_rec_ptr = 
+        (struct man_and_dis *) malloc(sizeof(struct man_and_dis))) == 0)
+    { 
+        fprintf(stderr, "Memory allocation error.\n"); 
+        exit(EXIT_FAILURE); 
+    } 
+     if ((presc_rec_ptr = 
+        (struct prescription *) malloc(sizeof(struct prescription))) == 0)
+    { 
+        fprintf(stderr, "Memory allocation error.\n"); 
+        exit(EXIT_FAILURE); 
+    } 
+       if ((gen_rec_ptr = 
+        (struct generic *) malloc(sizeof(struct generic))) == 0)
+    { 
+        fprintf(stderr, "Memory allocation error.\n"); 
+        exit(EXIT_FAILURE); 
+    } 
+
+   if ((cd_rec_ptr = 
+        (struct compound_dia *) malloc(sizeof(struct compound_dia))) == 0)
+    { 
+        fprintf(stderr, "Memory allocation error.\n"); 
+        exit(EXIT_FAILURE); 
+    } 
+
+
+
+ 
+/* Connect to ORACLE. */ 
+    strcpy(username, "alroece467"); 
+    strcpy(password, "c19013"); 
+ 
+    EXEC SQL WHENEVER SQLERROR DO sql_error("ORACLE error--");
+ 
+    EXEC SQL CONNECT :username IDENTIFIED BY :password; 
+    printf("\nConnected to ORACLE as user: %s\n \n", username); 
+
+    int i = 0;
+
+
+ int presc_count, quantity;
+ char exp_date[10];
+ char c_id[5];
+ char size_c[3]; 
+ char form[7]; 
+ char strength[5];
+ int     diagno_id;
+ char route_ad[15]; 
+ char instruct[20];
+ int     tax_cust;
+char     gen_no[5];
+char     gen_type[15];
+char     gen_id[5];
+
+    while (i != -1) {
+
+        printf("Choose an option\n \n");
+
+	printf("List all the active prescriptions of a particular customer... Press 1\n"); 
+
+	printf("List the details of all the distributors and manufacturers for a particular compound... Press 2\n");
+
+	printf("List the details (e.g., form, size, etc.) of a particular compound... Press 3\n"); 
+
+	printf("List the total number of active prescriptions together with their detailed information in the database... Press 4\n"); 
+
+	printf("List the number of refills left and the expiration date of a particular prescription... Press 5\n");
+
+        printf("List all the prescriptions that have compounds not appropriate for the conditions being treated.... Press 6\n"); 
+
+	printf("List all generic substitutions for a particular compound... Press 7\n"); 
+
+	printf("Insert a new prescription of a new customer into the database.... Press 8\n"); 
+
+	printf("Delete all prescriptions that are more than five years old from the database.... Press 9\n"); 
+	
+	printf("Update the address information for a particular physician... Press 10\n"); 
+
+	printf("To exit....... Press 11\n");
+
+        scanf("%d", &i);
+
+        clear_input_buffer();
+
+switch(i) {
+
+	case 1 : 
+
+       /* Declare the cursor. All static SQL explicit cursors
+ * not a (C) host variable.
+ */
+    
+    printf("Customer Tax Number?\n "); 
+
+    int taxNum;
+    char temp[20];
+
+    gets(temp);
+    taxNum = atoi(temp);
+
+      EXEC SQL DECLARE active CURSOR FOR 
+        SELECT prescId
+        FROM Prescription
+        WHERE taxNum = :taxNum;
+
+/* Open the cursor. */
+    EXEC SQL OPEN active; 
+ 
+/* Get ready to print results. */
+    printf("prescId  \n"); 
+    printf("-------  \n"); 
+ 
+/* Cause the program to break the loop when no more
+ * data can be retrieved on the cursor.
+ */
+    EXEC SQL WHENEVER NOT FOUND DO break; 
+
+    for (;;) 
+    { 
+        EXEC SQL FETCH active INTO :active_rec_ptr; 
+        printf("%s\n", active_rec_ptr->presc_id); 
+    } 
+ 
+/* Close the cursor. */
+    EXEC SQL CLOSE active;
+
+	printf("");
+
+	break;
+	
+	case 2 : 
+
+      /* Declare the cursor. All static SQL explicit cursors
+ * not a (C) host variable.
+ */
+    
+     
+    printf("Compound Id?\n "); 
+
+    VARCHAR compId[4];
+
+    gets(compId.arr);
+    compId.len = strlen(compId.arr);
+
+      EXEC SQL DECLARE mandis CURSOR FOR 
+        SELECT m.*, d.disId, d.disName, d.disaddress
+        FROM Manufacturer m
+        INNER JOIN Distributer d ON m.compId = d.compId
+        WHERE m.compId = :compId;
+
+/* Open the cursor. */
+    EXEC SQL OPEN mandis; 
+ 
+/* Get ready to print results. */
+    printf("manId  manName  manAddress  compId  disId  disName  disAddress  \n"); 
+    printf("-----  -------  ----------  ------  -----  -------  ---------- \n"); 
+ 
+/* Cause the program to break the loop when no more
+ * data can be retrieved on the cursor.
+ */
+    EXEC SQL WHENEVER NOT FOUND DO break; 
+
+    for (;;) 
+    { 
+        EXEC SQL FETCH mandis INTO :md_rec_ptr; 
+        printf("%s %s %s %s %s %s %s\n", md_rec_ptr->man_id, md_rec_ptr->man_name,
+        md_rec_ptr->man_address, md_rec_ptr->comp_id, md_rec_ptr->dis_id, md_rec_ptr->dis_name,
+        md_rec_ptr->dis_address); 
+    } 
+ 
+/* Close the cursor. */
+    EXEC SQL CLOSE mandis;
+
+	printf("");
+
+	break;
+
+	case 3 :       
+     
+    printf("Compound Id?\n ");
+
+    VARCHAR compId2[4]; 
+
+    gets(compId2.arr);
+    compId2.len = strlen(compId2.arr);
+
+    
+
+        EXEC SQL SELECT c.compId, c.sizeC, c.form, c.strength, c.diagnosticId, c.routeAd, c.instruct, c.taxNum
+        INTO :c_id, :size_c, :form, :strength, :diagno_id, :route_ad, :instruct, :tax_cust
+        FROM Compound c 
+        WHERE compId = :compId2;
+
+    printf("compId  sizeC  form  strength  diagnosticId   routeAd  instruct  taxNum  \n"); 
+    printf("------  -----  ----  --------  ------------  --------  --------  ------   \n \n");
+    
+ 
+        printf("%s %s %s %s %d %s %s %d \n", c_id, size_c, form, strength, diagno_id,
+        route_ad, instruct, tax_cust); 
+  
+ 
+	printf("");
+
+	break;
+
+	case 4 : 
+
+/* Declare the cursor 3. All static SQL explicit cursors
+ * not a (C) host variable.
+ */
+    
+      
+        EXEC SQL SELECT COUNT(prescId)
+        INTO :presc_count
+        FROM Prescription;
+
+       printf("num of prescriptions:  %d \n", presc_count); 
+
+
+       EXEC SQL DECLARE presc CURSOR FOR
+       SELECT p.prescId, p.fillType, p.compId, p.taxNum
+       FROM Prescription p;
+        
+
+/* Open the cursor. */
+    EXEC SQL OPEN presc; 
+ 
+/* Get ready to print results. */
+    printf("prescId  fillType  compId  taxNum  \n"); 
+    printf("-------  --------  ------  ------  \n"); 
+ 
+/* Cause the program to break the loop when no more
+ * data can be retrieved on the cursor.
+ */
+    EXEC SQL WHENEVER NOT FOUND DO break; 
+
+    for (;;) 
+    { 
+        EXEC SQL FETCH presc INTO :presc_rec_ptr; 
+        printf("%s  %s %s %d \n", presc_rec_ptr->presc_id, 
+               presc_rec_ptr->fill_type, presc_rec_ptr->comp_id, presc_rec_ptr->tax_num); 
+    } 
+ 
+/* Close the cursor. */
+    EXEC SQL CLOSE presc;
+
+	printf("");
+
+	break;
+
+	case 5 : 
+
+    printf("Prescription Id?\n ");
+
+    VARCHAR prescId[4]; 
+
+    gets(prescId.arr);
+    prescId.len = strlen(prescId.arr);
+
+
+        EXEC SQL SELECT r.quantity, ph.expDate
+        INTO :quantity, :exp_date
+        FROM Refill r
+        INNER JOIN Pharmacy ph ON r.prescId = ph.prescId
+        WHERE r.prescId = :prescId;
+
+        printf("num of refills left: %d \n",quantity);
+        printf("expiration date: %s \n",exp_date);
+
+
+
+	break;
+
+        case 6 : 
+	/* Declare the cursor 2. All static SQL explicit cursors
+ * not a (C) host variable.
+ */
+   
+        EXEC SQL DECLARE compd CURSOR FOR 
+        SELECT p.prescId
+        FROM Prescription p
+        INNER JOIN Compound c ON p.compId = c.compId
+        WHERE p.diagnosticId != c.diagnosticId;
+
+/* Open the cursor. */
+    EXEC SQL OPEN compd; 
+ 
+/* Get ready to print results. */
+    printf(" prescId \n"); 
+    printf(" ------  \n");
+ 
+/* Cause the program to break the loop when no more
+ * data can be retrieved on the cursor.
+ */
+    EXEC SQL WHENEVER NOT FOUND DO break; 
+
+    for (;;) 
+    { 
+        EXEC SQL FETCH compd INTO :cd_rec_ptr; 
+        printf(" %s \n", cd_rec_ptr->presc_id); 
+    } 
+ 
+/* Close the cursor. */
+    EXEC SQL CLOSE compd;
+
+	printf("");
+
+
+	break;
+        
+        case 7 : 
+
+    
+     
+    printf("Compound Id?\n "); 
+
+    VARCHAR compId3[4];
+
+    gets(compId3.arr);
+    compId3.len = strlen(compId3.arr);
+
+       EXEC SQL DECLARE gen CURSOR FOR 
+        SELECT *
+        FROM Generic_Substitution
+        WHERE compId = :compId3;
+ 
+
+/* Open the cursor. */
+    EXEC SQL OPEN gen; 
+ 
+    printf("genNo  genType  compId  \n"); 
+    printf("-----  -------  ------ \n"); 
+
+/* Cause the program to break the loop when no more
+ * data can be retrieved on the cursor.
+ */
+    EXEC SQL WHENEVER NOT FOUND DO break; 
+
+    for (;;) 
+    { 
+         EXEC SQL FETCH gen INTO :gen_rec_ptr;
+         printf("%s %s %s \n", gen_rec_ptr->gen_no, gen_rec_ptr->gen_type,
+        gen_rec_ptr->gen_id);  
+    } 
+ 
+/* Close the cursor. */
+    EXEC SQL CLOSE gen;
+
+
+       
+
+	printf("");
+
+	
+	break;
+
+        case 8 : 
+	
+    printf("Customer Name?\n "); 
+
+    VARCHAR cust_name[15];
+    VARCHAR cust_address[15];
+    int tax_num;
+    char temp2[20];
+    VARCHAR phone[15];
+    VARCHAR presc_num[15];
+    VARCHAR comp_num[15];
+
+    gets(cust_name.arr);
+    cust_name.len = strlen(cust_name.arr);
+
+    printf("Customer Address?\n "); 
+    gets(cust_address.arr);
+    cust_address.len = strlen(cust_address.arr);
+
+    printf("Tax Number?\n "); 
+    gets(temp2);
+    tax_num = atoi(temp2);
+    
+ 
+    printf("Phone?\n "); 
+    gets(phone.arr);
+    phone.len = strlen(phone.arr);
+
+
+    EXEC SQL INSERT INTO Customer (custName, custAddress, taxNum, DOB, Phone) 
+    VALUES (:cust_name, :cust_address, :tax_num, TO_DATE('1985/11/11','yyyy/mm/dd'), :phone); 
+
+    printf("\n 1 row created \n");
+
+    printf("Prescription Number?\n "); 
+    gets(presc_num.arr);
+    presc_num.len = strlen(presc_num.arr);
+
+    printf("Compound Number?\n "); 
+    gets(comp_num.arr);
+    comp_num.len = strlen(comp_num.arr);
+
+    EXEC SQL INSERT INTO Prescription (prescId, fillType, compId, taxNum) 
+    VALUES (:presc_num, 'fill as written', :comp_num, :tax_num);
+
+    printf("\n 1 row created \n");
+
+
+	break;
+
+	case 9 : 
+	
+        EXEC SQL DELETE FROM Prescription
+        WHERE prescId IN (SELECT prescId
+        FROM Pharmacy
+        WHERE timeHeld > 5); 
+
+        printf("deleted rows \n");
+
+	break;
+
+        case 10: 
+
+        printf("Pharmacist License Number?\n "); 
+
+    int licNum;
+    char temp3[20];
+
+    gets(temp3);
+    licNum = atoi(temp3);
+    
+    printf("New Address?\n "); 
+
+    VARCHAR new_address[15];
+    gets(new_address.arr);
+    new_address.len = strlen(new_address.arr);
+
+        EXEC SQL UPDATE Pharmacist 
+        SET paddress = :new_address 
+        WHERE licNum = :licNum;
+
+    printf("Updated address to %s \n", new_address);
+
+
+	
+	break;
+
+
+        case 11 : 
+	i = -1;
+	break;
+
+	default :
+
+     printf("not a valid option, try again\n \n");
+	
+	break;
+
+}
+
+}
+
+
+    EXEC SQL COMMIT WORK RELEASE; 
+    exit(EXIT_SUCCESS); 
+} 
+
