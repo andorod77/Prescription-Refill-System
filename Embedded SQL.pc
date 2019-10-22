@@ -1,11 +1,3 @@
-/*
- *  project.pc
- *
- *  This program connects to ORACLE, declares and opens a cursor, 
- *  fetches the names, salaries, and commissions of all
- *  salespeople, displays the results, then closes the cursor. 
- */ 
-
 #include <stdio.h>
 #include <string.h>
 #include <sqlca.h>
