@@ -1,3 +1,3 @@
 # Prescription-Refill-System
 
-Created EER diagrams to design a Drug Refill System in Oracle Database 12c. Coded a menu in embedded SQL (C) to interact with the database.
+Prescription Drug-Refill System database created using Oracle Database 12c. Details the design process of defining the entities/relationships of the system and populating them with tuples. An embedded SQL (C) menu was added to interact with the database.
